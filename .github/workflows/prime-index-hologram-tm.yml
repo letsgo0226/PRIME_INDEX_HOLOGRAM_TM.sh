@@ -1,0 +1,50 @@
+name: PRIME_INDEX_HOLOGRAM_TM
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  push:
+    branches: [main, master]
+    paths:
+      - "PRIME_INDEX_HOLOGRAM_TM.sh"
+      - "PRIME_INDEX_HOLOGRAM_TM.md"
+      - ".github/workflows/prime-index-hologram-tm.yml"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [prime_index_hologram_tm]
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify prime-index hologram TM certificate
+        run: |
+          set -euo pipefail
+          BYTES=$(wc -c < PRIME_INDEX_HOLOGRAM_TM.sh | tr -d ' ')
+          echo "bytes=$BYTES"
+          test "$BYTES" -lt 2048
+          rm -f state.json
+          bash PRIME_INDEX_HOLOGRAM_TM.sh | tee cert.json
+          python3 - <<'PY'
+          import json
+          o=json.load(open("cert.json"))
+          ex=o.get("exact") or {}
+          cl=o.get("claims") or {}
+          assert o.get("model")=="PRIME_INDEX_HOLOGRAM_TM"
+          assert ex.get("float") is False and ex.get("sha") is False
+          assert cl.get("RH_proved") is False
+          assert cl.get("exact_integer") is True
+          assert o.get("ordinal_exact") is True
+          assert o.get("prime") is True
+          assert o.get("n")==1 and o.get("p")==2
+          print("PASS", "n=", o.get("n"), "p=", o.get("p"))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prime-index-hologram-tm-certificate
+          path: cert.json
